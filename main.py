@@ -1,30 +1,44 @@
-from flask import Flask, jsonify, request, render_template
+import socket
+import struct
+import io
+from PIL import Image
 
-app = Flask(__name__)
+HOST = '0.0.0.0'  # Accetta connessioni da qualsiasi interfaccia di rete
+PORT = 8000
 
-# Esempio di route per una richiesta API GET
-@app.route('/api/saluta', methods=['GET'])
-def saluta():
-    return jsonify({'messaggio': 'Ciao, benvenuto nella mia API!'})
+def receive_image(conn):
+    # Ricevi la lunghezza dei dati come 4 byte non firmati
+    data_length = struct.unpack('I', conn.recv(4))[0]
 
-# Esempio di route per una richiesta API POST
-@app.route('/api/sommare', methods=['POST'])
-def sommare():
-    dati = request.get_json()
+    # Ricevi i dati dell'immagine
+    image_data = b''
+    while len(image_data) < data_length:
+        image_data += conn.recv(data_length - len(image_data))
 
-    if 'numero1' not in dati or 'numero2' not in dati:
-        return jsonify({'errore': 'Fornisci entrambi i numeri'}), 400
+    # Converti i dati dell'immagine in un oggetto immagine utilizzando il modulo PIL
+    try:
+        image = Image.open(io.BytesIO(image_data))
+        image.show()
+    except Exception as e:
+        print(f"Error processing image: {e}")
 
-    numero1 = dati['numero1']
-    numero2 = dati['numero2']
-    somma = numero1 + numero2
+def main():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
 
-    return jsonify({'risultato': somma})
+    print(f"Server listening on {HOST}:{PORT}")
 
-# Esempio di route per la pagina principale
-@app.route('/')
-def index():
-    return render_template('index.html')
+    while True:
+        conn, addr = server_socket.accept()
+        print(f"Accepted connection from {addr}")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        try:
+            receive_image(conn)
+        except Exception as e:
+            print(f"Error processing image: {e}")
+        finally:
+            conn.close()
+
+if __name__ == "__main__":
+    main()
